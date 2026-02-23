@@ -9,6 +9,8 @@ import mujoco.viewer
 
 import glfw
 import cv2
+from typing import Tuple
+from scipy.spatial.transform import Rotation
 
 
 from manipulator_grasp.path_plan.set_model import (
@@ -176,6 +178,106 @@ class UR3eGraspEnv:
             'img': self.renderer.render(),
             'depth': self.depth_renderer.render()
         }
+
+    def get_site_pose(self, site_name: str) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        获取指定 site 的位姿信息。
+        
+        Args:
+            site_name (str): site 名称字符串
+            
+        Returns:
+            Tuple[np.ndarray, np.ndarray]:
+                - position (np.ndarray): 形状为 (3,) 的位置向量 [x, y, z]
+                - quaternion (np.ndarray): 形状为 (4,) 的四元数向量 [w, x, y, z]
+                
+        Raises:
+            ValueError: 如果找不到指定名称的 site
+        """
+        site_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_SITE, site_name)
+        if site_id == -1:
+            raise ValueError(f"未找到名为 '{site_name}' 的 site")
+
+        position = np.array(self.data.site(site_id).xpos)
+        xmat = np.array(self.data.site(site_id).xmat)
+        quaternion = np.zeros(4)
+        mujoco.mju_mat2Quat(quaternion, xmat)
+
+        return position, quaternion
+
+    def get_body_pose(self, body_name: str) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        获取指定 body 的位姿信息。
+        
+        Args:
+            body_name (str): body 名称字符串
+            
+        Returns:
+            Tuple[np.ndarray, np.ndarray]:
+                - position (np.ndarray): 形状为 (3,) 的位置向量 [x, y, z]
+                - quaternion (np.ndarray): 形状为 (4,) 的四元数向量 [w, x, y, z]
+                
+        Raises:
+            ValueError: 如果找不到指定名称的 body
+        """
+        body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+        if body_id == -1:
+            raise ValueError(f"未找到名为 '{body_name}' 的 body")
+        
+        position = np.array(self.data.body(body_id).xpos)
+        quaternion = np.array(self.data.body(body_id).xquat)
+        
+        return position, quaternion
+
+    def check_collision(self, geom1_id: int, geom2_id: int) -> bool:
+        """
+        基于 MuJoCo 的原生接触数据检测两个几何体是否发生物理碰撞。
+        比使用 AABB 包围盒或者距离计算更精确，这直接利用了底层解算器的碰撞流形。
+        
+        Args:
+            geom1_id (int): 参与碰撞检测的第一个几何体 ID
+            geom2_id (int): 参与碰撞检测的第二个几何体 ID
+            
+        Returns:
+            bool: 如果发生碰撞返回 True，否则返回 False
+        """
+        for contact in self.data.contact:
+            if (contact.geom1 == geom1_id and contact.geom2 == geom2_id) or \
+               (contact.geom2 == geom1_id and contact.geom1 == geom2_id):
+                return True
+        return False
+
+    def compute_reward(self, gripper_pos: np.ndarray, gripper_quat: np.ndarray, target_pos: np.ndarray, target_quat: np.ndarray) -> float:
+        """
+        计算平滑的抓取奖励（基于位置和姿态的误差）。
+        可以通过 tanh 函数将无界的距离/角度差异拉伸到 [0, MAX] 区域内的连续得分。
+        可用于评估 RL 动作或对各种算法生成的抓取位姿质量进行二次打分。
+        
+        Args:
+            gripper_pos (np.ndarray): 夹爪末端位置 [x, y, z]
+            gripper_quat (np.ndarray): 夹爪末端四元数 [w, x, y, z] (SciPy标准)
+            target_pos (np.ndarray): 目标位置 [x, y, z]
+            target_quat (np.ndarray): 目标四元数 [w, x, y, z] (SciPy标准)
+            
+        Returns:
+            float: 连续且平滑的奖励值
+        """
+        # 1. 相对位置惩罚/奖励转换
+        rel_pos = target_pos - gripper_pos
+        distance = np.linalg.norm(rel_pos)
+        # 距离越小，奖励越接近 5
+        pos_reward = 5.0 * (1.0 - np.tanh(10.0 * distance))
+        
+        # 2. 相对姿态惩罚/奖励转换
+        # 计算将当前姿态旋转到目标姿态所需的旋转向量
+        rel_rot_vec = (Rotation.from_quat(gripper_quat).inv() * 
+                       Rotation.from_quat(target_quat)).as_rotvec()
+        rot_error = np.linalg.norm(rel_rot_vec)
+        # 姿态误差越小，奖励越接近 1
+        ori_reward = 1.0 * (1.0 - np.tanh(3.0 * rot_error))
+        
+        # 返回加和的总奖励
+        return pos_reward + ori_reward
 
 
 
