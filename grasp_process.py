@@ -374,6 +374,7 @@ def execute_grasp(env, gg_list, cloud_o3d, planner_type='rrtconnect'):
                         print("[execute_grasp] RL place successful!")
                         rl_place_success = True
                         q_traj4 = None  # RL already executed movement
+                        action[:6] = env.data.qpos[:6].copy()
                     else:
                         print("[execute_grasp] RL place failed, falling back to RRT...")
                         q_traj4 = get_traj(env, q_start4, q_goal4)
@@ -382,7 +383,10 @@ def execute_grasp(env, gg_list, cloud_o3d, planner_type='rrtconnect'):
                 
                 if rl_place_success or q_traj4 is not None:
                     print("------q_traj4 plan successful------")
-                    q_start5 = q_goal4
+                    if rl_place_success:
+                        q_start5 = env.data.qpos[:6].copy()
+                    else:
+                        q_start5 = q_goal4
                     q_goal5  = q_start1
                     q_traj5 = get_traj(env, q_start5, q_goal5)
                     if q_traj5 is not None:

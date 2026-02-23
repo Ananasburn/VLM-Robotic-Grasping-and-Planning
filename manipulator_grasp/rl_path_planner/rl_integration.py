@@ -296,9 +296,8 @@ class RLPathPlanner:
             # Substeps matching training environment
             for _ in range(self.substeps):
                 mujoco.mj_step(env.model, env.data)
-            
-            if visualize and hasattr(env, 'viewer') and env.viewer is not None:
-                env.viewer.sync()
+                if visualize and hasattr(env, 'viewer') and env.viewer is not None:
+                    env.viewer.sync()
         
         logger.warning(f"Timeout after {self.max_steps} steps (dist={dist:.4f})")
         return False, trajectory
