@@ -89,6 +89,7 @@ class RLPathPlanner:
             print(f"[RL Planner] Warning: VecNormalize not found at {vecnormalize_path}")
         
 
+
         # RL environment parameters (with speed control)
         self.action_scale = action_scale if action_scale is not None else 0.05  # Reduced from 0.3 for slower motion
         self.substeps = substeps if substeps is not None else 25  # Increased from 10 for smoother motion
