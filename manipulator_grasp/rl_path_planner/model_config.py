@@ -18,19 +18,19 @@ MODELS_DIR = os.path.join(_BASE_DIR, 'models')
 
 PLACE_PHASE_CONFIG = {
     # Option 1: Use best_model.zip (recommended after training)
-    # 'model_path': os.path.join(MODELS_DIR, 'place_with_object_v1', 'best_model.zip'),
-    # 'vecnormalize_path': os.path.join(MODELS_DIR, 'place_with_object_v1', 'best_model_vecnormalize.pkl'),
+    'model_path': os.path.join(MODELS_DIR, 'task_space_avoidance_v1', 'best_model.zip'),
+    'vecnormalize_path': os.path.join(MODELS_DIR, 'task_space_avoidance_v1', 'final_model_vecnormalize.pkl'),
     
     # Option 2: Use final_model.zip
-    'model_path': os.path.join(MODELS_DIR, 'place_with_object_v1', 'final_model.zip'),
-    'vecnormalize_path': os.path.join(MODELS_DIR, 'place_with_object_v1', 'final_model_vecnormalize.pkl'),
+    # 'model_path': os.path.join(MODELS_DIR, 'task_space_avoidance_v1', 'final_model.zip'),
+    # 'vecnormalize_path': os.path.join(MODELS_DIR, 'task_space_avoidance_v1', 'final_model_vecnormalize.pkl'),
     
     # Option 3: Use specific checkpoint
-    # 'model_path': os.path.join(MODELS_DIR, 'place_with_object_v1', 'place_phase_2500000_steps.zip'),
-    # 'vecnormalize_path': os.path.join(MODELS_DIR, 'place_with_object_v1', 'place_phase_vecnormalize_2500000_steps.pkl'),
+    # 'model_path': os.path.join(MODELS_DIR, 'task_space_avoidance_v1', 'task_space_rl_2000000_steps.zip'),
+    # 'vecnormalize_path': os.path.join(MODELS_DIR, 'task_space_avoidance_v1', 'task_space_rl_vecnormalize_2000000_steps.pkl'),
     
     # Training configuration (for reference)
-    'drop_zone_center': [0.6, 0.2, 0.83],  # Target position used during training
+    'drop_zone_center': [0.6, 0.2, 0.83],  # Target position used during training (place zone is Z=0.83)
     'success_threshold': 0.10,  # 10cm threshold
     'max_steps': 500,
 }

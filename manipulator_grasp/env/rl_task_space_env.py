@@ -84,7 +84,17 @@ class RLTaskSpaceEnv(gym.Env):
             "success_bonus": 1000.0,      # 成功奖励 (提高5倍)
             "time_penalty": -1.0,         # 时间惩罚 (提高惩罚)
             "joint_limit_penalty": 5.0,   # 关节限制惩罚 (用于 barrier function)
+            "obstacle_penalty_weight": 50.0, # 障碍物排斥惩罚权重
+            "safe_distance": 0.1,         # 障碍物安全阈值 (0.1米)
         }
+        
+        # 障碍物中心位置 (用于 RL 代理避障)
+        self.obstacle_positions = np.array([
+            [1.35, 0.2, 1.0],      # obstacle_box_1
+            [0.6, 0.6, 0.85],      # obstacle_sphere_1
+            [0.6, 0.6, 1.5],       # obstacle_sphere_2
+            [0.8, 1.0, 1.0],       # obstacle_sphere_3
+        ])
         
         # ============================================================
         # 自适应奖励配置 (Curriculum Learning) - 已禁用
@@ -132,9 +142,9 @@ class RLTaskSpaceEnv(gym.Env):
         self._load_mujoco_model()
         self._load_pinocchio_model()
         
-        # 观测空间: ee_pos(3) + ee_quat(4) + joint_pos(6) + target_pos(3) = 16
+        # 观测空间: ee_pos(3) + ee_quat(4) + joint_pos(6) + target_pos(3) + obstacles(4*3=12) = 28
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(16,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(28,), dtype=np.float32
         )
         
         # 动作空间: 6维关节增量
@@ -457,7 +467,18 @@ class RLTaskSpaceEnv(gym.Env):
         # 7. 时间惩罚
         reward += cfg["time_penalty"]
         
-        # 8. 渐进式关节限位惩罚 (Barrier Function)
+        # 8. 障碍物排斥惩罚 (Artificial Potential Field)
+        obstacle_penalty = 0.0
+        for obs_pos in self.obstacle_positions:
+            dist_to_obs = np.linalg.norm(ee_pos - obs_pos)
+            if dist_to_obs < cfg["safe_distance"]:
+                penalty = -cfg["obstacle_penalty_weight"] * ((1.0 - dist_to_obs / cfg["safe_distance"]) ** 2)
+                obstacle_penalty += penalty
+                
+        reward += obstacle_penalty
+        info["obstacle_penalty"] = obstacle_penalty
+        
+        # 9. 渐进式关节限位惩罚 (Barrier Function)
         q = self.mj_data.qpos[:6].copy()
         joint_limit_penalty = self._compute_joint_limit_penalty(q)
         reward += joint_limit_penalty
@@ -484,6 +505,7 @@ class RLTaskSpaceEnv(gym.Env):
             ee_quat,     # 4
             q_current,   # 6
             target_pos,  # 3
+            self.obstacle_positions.flatten(), # 12
         ])
         
         return obs.astype(np.float32)

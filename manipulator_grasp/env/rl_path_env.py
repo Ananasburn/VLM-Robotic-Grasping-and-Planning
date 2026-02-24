@@ -64,7 +64,17 @@ class RLPathEnv(gym.Env):
             "time_penalty": -0.01,            # 时间惩罚
             "joint_limit_penalty": -5.0,      # 关节限制惩罚
             "velocity_penalty": -0.005,       # 速度惩罚(防止过快运动)
+            "obstacle_penalty_weight": 10.0,  # 障碍物排斥惩罚权重 (按比例)
+            "safe_distance": 0.1,             # 障碍物安全阈值 (0.1米)
         }
+        
+        # 障碍物中心位置 (用于 RL 代理避障)
+        self.obstacle_positions = np.array([
+            [1.35, 0.2, 1.0],      # obstacle_box_1
+            [0.6, 0.6, 0.85],      # obstacle_sphere_1
+            [0.6, 0.6, 1.5],       # obstacle_sphere_2
+            [0.8, 1.0, 1.0],       # obstacle_sphere_3
+        ])
         
         # 机器人参数
         self.n_joints = 6  # UR3e有6个关节
@@ -81,8 +91,8 @@ class RLPathEnv(gym.Env):
         # Pinocchio模型用于正向运动学
         self._load_pinocchio_model()
         
-        # 定义观察和动作空间 (增强版: 18维)
-        obs_dim = 12 + 6  # q_current(6) + q_goal(6) + ee_pos(3) + ee_goal_pos(3)
+        # 定义观察和动作空间 (增强版: 18 + 12 = 30维)
+        obs_dim = 12 + 6 + 12 # q_current(6) + q_goal(6) + ee_pos(3) + ee_goal_pos(3) + obstacles(4*3=12)
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float32
         )
@@ -320,7 +330,19 @@ class RLPathEnv(gym.Env):
         # 6. 时间惩罚
         reward += self.reward_config["time_penalty"]
         
-        # 7. 关节限制惩罚
+        # 7. 障碍物排斥惩罚 (Artificial Potential Field)
+        obstacle_penalty = 0.0
+        ee_pos = self._get_ee_position(q)
+        for obs_pos in self.obstacle_positions:
+            dist_to_obs = np.linalg.norm(ee_pos - obs_pos)
+            if dist_to_obs < self.reward_config["safe_distance"]:
+                penalty = -self.reward_config["obstacle_penalty_weight"] * ((1.0 - dist_to_obs / self.reward_config["safe_distance"]) ** 2)
+                obstacle_penalty += penalty
+                
+        reward += obstacle_penalty
+        info["obstacle_penalty"] = obstacle_penalty
+        
+        # 8. 关节限制惩罚
         if self._check_joint_limits(q):
             reward += self.reward_config["joint_limit_penalty"]
             info["joint_limit_violation"] = True
@@ -348,7 +370,7 @@ class RLPathEnv(gym.Env):
         ee_pos = self._get_ee_position(q_current)
         ee_goal_pos = self._get_ee_position(q_goal)
         
-        obs = np.concatenate([q_current, q_goal, ee_pos, ee_goal_pos])
+        obs = np.concatenate([q_current, q_goal, ee_pos, ee_goal_pos, self.obstacle_positions.flatten()])
         return obs.astype(np.float32)
         
     def _sample_start_goal(self) -> Tuple[np.ndarray, np.ndarray]:
