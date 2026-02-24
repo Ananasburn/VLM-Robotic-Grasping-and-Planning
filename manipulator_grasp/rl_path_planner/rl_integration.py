@@ -92,10 +92,6 @@ class RLPathPlanner:
             print(f"[RL Planner] Warning: VecNormalize not found at {vecnormalize_path}")
         
 
-        # RL environment parameters — MUST match training environment (RLPlaceEnv)
-        # Training uses action_scale=0.3, substeps=10
-        self.action_scale = action_scale if action_scale is not None else 0.3
-
         # RL environment parameters (with speed control)
         ### action_scale 决定了每一步 RL 动作给予底层 PD 控制器的目标关节增量（越小每次移动的角度越少）。
         ### substeps 决定了这一个增量经过多少次底层的物理演算来到达（越少插值时间越短，动作越快）。
