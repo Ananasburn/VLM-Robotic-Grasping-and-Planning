@@ -96,7 +96,7 @@ class RLPathPlanner:
         ### action_scale 决定了每一步 RL 动作给予底层 PD 控制器的目标关节增量（越小每次移动的角度越少）。
         ### substeps 决定了这一个增量经过多少次底层的物理演算来到达（越少插值时间越短，动作越快）。
         ### 要留意这两个数值是经典的 RL 机械臂控制参数组合。
-        self.action_scale = action_scale if action_scale is not None else 0.15
+        self.action_scale = action_scale if action_scale is not None else 0.3 # 0.15
 
         self.substeps = substeps if substeps is not None else 10
         self.clip_obs = 10.0  # VecNormalize uses clip_obs=10.0
@@ -217,7 +217,7 @@ class RLPathPlanner:
                 continue
             
             # 检查碰撞力度
-            if contact.dist < 0:  # 负距离表示穿透
+            if contact.dist < -0.001:  # 负距离表示穿透    0 or -0.001
                 logger.warning(f"Collision detected: {geom1_name} <-> {geom2_name} (dist={contact.dist:.4f})")
                 return True
         
