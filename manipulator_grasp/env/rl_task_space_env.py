@@ -84,8 +84,8 @@ class RLTaskSpaceEnv(gym.Env):
             "success_bonus": 1000.0,      # 成功奖励
             "time_penalty": -1.0,         # 时间惩罚
             "joint_limit_penalty": 5.0,   # 关节限制惩罚 (用于 barrier function)
-            "safe_distance": 0.05,        # 软排斥区距离阈值 (5cm)，以内给予连续惩罚
-            "repulsion_weight": 5.0,      # 软排斥区惩罚权重
+            "safe_distance": 0.08,        # 软排斥区距离阈值 (5cm)，以内给予连续惩罚
+            "repulsion_weight": 50.0,      # 软排斥区惩罚权重
         }
         
         # ============================================================
