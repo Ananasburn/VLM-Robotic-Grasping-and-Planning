@@ -1,22 +1,3 @@
-"""
-GR-ConvNet 适配模块 — 将 GR-ConvNet 的 2D 像素级抓取预测转换为 3D 抓取位姿。
-
-GR-ConvNet 输出四张 224×224 预测图（质量、cos/sin 角度分量、宽度），
-本模块负责：
-1. 加载训练好的 GR-ConvNet 模型
-2. 预处理 MuJoCo 渲染的 RGB-D 图像
-3. 将 2D 像素预测反投影为 3D 相机坐标系抓取位姿
-4. 包装为 GraspCandidate 以兼容 execute_grasp 流程
-
-用法示例::
-
-    from gr_convnet_adapter import run_grconvnet_inference
-
-    gg_list, cloud_o3d = run_grconvnet_inference(
-        color_img, depth_img, sam_mask, target_name="banana"
-    )
-"""
-
 import os
 import sys
 import logging
@@ -49,33 +30,17 @@ from grasp_gen_adapter import GraspCandidate  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# 默认 checkpoint 路径（可通过环境变量覆盖）
-# ---------------------------------------------------------------------------
+
 _DEFAULT_CHECKPOINT = os.path.join(
     GRCONVNET_DIR, 'logs', '260219_0055_training_cornell', 'epoch_48_iou_0.98'
 )
 _CHECKPOINT_PATH = os.environ.get('GRCONVNET_CHECKPOINT', _DEFAULT_CHECKPOINT)
 
-# ---------------------------------------------------------------------------
-# 全局单例：GR-ConvNet 模型（延迟加载）
-# ---------------------------------------------------------------------------
 _grconvnet_model = None
 
 
 def _get_grconvnet_model() -> torch.nn.Module:
-    """
-    延迟加载 GR-ConvNet 模型（单例模式）。
 
-    模型 checkpoint 是通过 torch.save() 序列化的完整模型对象，
-    使用 torch.load() 直接加载即可获得可推理的模型实例。
-
-    Returns:
-        加载好的 GenerativeResnet 模型，已设为 eval 模式并移至 GPU/CPU。
-
-    Raises:
-        FileNotFoundError: 如果 checkpoint 文件不存在
-    """
     global _grconvnet_model
     if _grconvnet_model is not None:
         return _grconvnet_model
@@ -100,9 +65,7 @@ def _get_grconvnet_model() -> torch.nn.Module:
     return _grconvnet_model
 
 
-# ---------------------------------------------------------------------------
-# 数据预处理：将项目图像转换为 GR-ConvNet 输入格式
-# ---------------------------------------------------------------------------
+
 def _preprocess_for_grconvnet(
     color_input: "np.ndarray | str",
     depth_input: "np.ndarray | str",
@@ -110,18 +73,6 @@ def _preprocess_for_grconvnet(
     output_size: int = 224,
 ) -> tuple[torch.Tensor, tuple[int, int]]:
     """
-    将 RGB 和深度图像预处理为 GR-ConvNet 输入张量。
-
-    当提供 SAM 分割掩码时，以掩码 bounding box 中心作为裁剪中心
-    （而非固定图像中心），并将掩码外的像素归零，让网络聚焦于目标物体。
-
-    处理步骤：
-    1. 读取/解析 RGB、深度图和可选 mask
-    2. 以 mask bbox 中心（或图像中心）裁剪 output_size × output_size
-    3. mask 外像素归零
-    4. 归一化（零均值）
-    5. 拼接为 4 通道张量 [1, 4, H, W]
-
     Args:
         color_input: RGB 图像路径或 (H, W, 3) uint8/float 数组（BGR 或 RGB 均可）
         depth_input: 深度图路径或 (H, W) float 数组
@@ -198,7 +149,7 @@ def _preprocess_for_grconvnet(
     depth_crop = depth[top:bottom, left:right].copy()
 
     # 7. mask 外像素归零（让网络聚焦于目标物体）
-    # 7. [已移除] mask 外像素归零
+    # 7. mask 外像素归零
     # 原因：强制置零导致深度图产生剧烈断层（边缘效应），使热力图聚集在物体边缘。
     #      保留背景有助于网络理解上下文。后处理会负责过滤背景抓取。
     # if mask is not None:
@@ -239,19 +190,11 @@ def _pixel_grasps_to_3d_poses(
     n_grasps: int = 10,
 ) -> list[GraspCandidate]:
     """
-    将 GR-ConvNet 的 2D 像素级预测转换为 3D 相机坐标系的 GraspCandidate 列表。
-
-    转换流程：
-    1. 使用 detect_grasps() 从预测图中检测局部极大值
-    2. 将 224×224 坐标映射回原始图像坐标
-    3. 利用深度值 + 相机内参反投影为 3D 坐标
-    4. 构造 top-down 旋转矩阵（绕相机光轴旋转 ang 角度）
-
     Args:
-        q_img: 抓取质量图，形状 [224, 224]
-        ang_img: 抓取角度图（弧度），形状 [224, 224]
-        width_img: 抓取宽度图（像素），形状 [224, 224]
-        depth_full: 完整深度图（原始分辨率），形状 [H, W]
+        q_img: 抓取质量图，[224, 224]
+        ang_img: 抓取角度图（弧度），[224, 224]
+        width_img: 抓取宽度图（像素），[224, 224]
+        depth_full: 完整深度图（原始分辨率），[H, W]
         crop_offset: (offset_y, offset_x) 裁剪偏移量
         image_height: 原始图像高度
         image_width: 原始图像宽度
@@ -366,11 +309,6 @@ def _build_pointcloud(
     mask_input: "np.ndarray | str",
 ) -> o3d.geometry.PointCloud:
     """
-    从 RGB 图、深度图和分割掩码构造 Open3D 点云。
-
-    复用 graspnet-baseline 的 CameraInfo / create_point_cloud_from_depth_image，
-    与 grasp_process.get_and_process_data 使用相同的相机内参。
-
     Args:
         color_input: RGB 图像路径或 (H, W, 3) uint8 数组
         depth_input: 深度图路径或 (H, W) float 数组
@@ -441,18 +379,6 @@ def run_grconvnet_inference(
     n_grasps: int = 10,
 ) -> tuple[list[GraspCandidate], o3d.geometry.PointCloud]:
     """
-    执行 GR-ConvNet 推理，返回排序后的抓取候选列表和物体点云。
-
-    接口签名与 grasp_process.run_grasp_inference 对齐，以便上层无缝切换。
-
-    流程：
-    1. 预处理 RGB-D 图像为 GR-ConvNet 输入格式
-    2. 加载模型并执行前向推理
-    3. 后处理：高斯滤波获得 q_img/ang_img/width_img
-    4. 检测 2D 抓取并反投影为 3D 位姿
-    5. 角度筛选 + 综合评分排序
-    6. 构造物体点云
-
     Args:
         color_path: RGB 图像路径或 numpy 数组（BGR uint8）
         depth_path: 深度图路径或 numpy 数组（float，单位：米）
@@ -632,8 +558,6 @@ def _save_grconvnet_visualizations(
     target_name: str,
 ) -> None:
     """
-    将 GR-ConvNet 预测的抓取候选可视化保存为图片。
-
     Args:
         cloud_o3d: 物体点云
         q_img: 抓取质量图 [224, 224]

@@ -1,11 +1,3 @@
-"""
-RL Path Planner Inference Wrapper
-RL路径规划器推理封装
-
-提供训练好的RL策略的加载和使用接口,
-生成从起点到目标的轨迹
-"""
-
 import os
 import sys
 import numpy as np
@@ -28,11 +20,7 @@ class PlannerType(Enum):
 
 
 class RLPlanner:
-    """
-    RL策略封装类
-    
-    加载训练好的PPO策略并用于生成轨迹
-    """
+
     
     def __init__(
         self,

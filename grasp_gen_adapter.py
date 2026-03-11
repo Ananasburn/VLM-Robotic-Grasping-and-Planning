@@ -1,18 +1,3 @@
-"""
-GraspGen 适配模块 — 封装 NVlabs/GraspGen 推理流程。
-
-将 GraspGen 的 4×4 齐次矩阵输出适配为与 GraspNet-baseline 兼容的接口，
-使 execute_grasp 等下游模块无需修改即可使用。
-
-用法示例::
-
-    from grasp_gen_adapter import run_graspgen_inference
-
-    gg_list, cloud_o3d = run_graspgen_inference(
-        color_img, depth_img, sam_mask, target_name="banana"
-    )
-"""
-
 import os
 import sys
 import logging
@@ -43,14 +28,9 @@ _GRASPGEN_GRIPPER_CONFIG = os.environ.get(
 )
 
 
-# ---------------------------------------------------------------------------
-# 兼容层：GraspCandidate —— 模仿 graspnetAPI.Grasp 的接口
-# ---------------------------------------------------------------------------
 @dataclass
 class GraspCandidate:
     """
-    统一的抓取候选数据类，兼容 GraspNet-baseline 的 Grasp 接口。
-
     Attributes:
         rotation_matrix: 3×3 旋转矩阵（np.ndarray, float64）
         translation: 3D 平移向量（np.ndarray, float64）
@@ -67,7 +47,7 @@ class GraspCandidate:
 
     def to_open3d_geometry_list(self) -> list:
         """
-        生成 Open3D 可视化几何体列表（简易夹爪线框）。
+        生成 Open3D 可视化几何体列表。
 
         Returns:
             包含 Open3D LineSet 的列表
@@ -105,18 +85,7 @@ class GraspCandidate:
 # GraspGen 模型加载
 # ---------------------------------------------------------------------------
 def _get_graspgen_sampler():
-    """
-    延迟加载 GraspGen 推理器（单例模式）。
 
-    首次调用时导入 grasp_gen 包并加载模型 checkpoint。
-
-    Returns:
-        GraspGenSampler 实例
-
-    Raises:
-        ImportError: 如果 grasp_gen 包未安装或 pointnet2_ops 未编译
-        FileNotFoundError: 如果 gripper config 文件不存在
-    """
     global _graspgen_sampler
     if _graspgen_sampler is not None:
         return _graspgen_sampler
@@ -148,11 +117,6 @@ def _build_pointcloud_from_images(
     mask_input: "np.ndarray | str",
 ) -> tuple[np.ndarray, np.ndarray, o3d.geometry.PointCloud]:
     """
-    从 RGB 图、深度图和分割掩码构造物体点云。
-
-    复用 graspnet-baseline 的 CameraInfo / create_point_cloud_from_depth_image，
-    与 grasp_process.get_and_process_data 使用相同的相机内参。
-
     Args:
         color_input: RGB 图像路径或 (H, W, 3) uint8 数组
         depth_input: 深度图路径或 (H, W) float 数组
@@ -211,17 +175,12 @@ def _build_pointcloud_from_images(
     return cloud_masked, color_masked, cloud_o3d
 
 
-# ---------------------------------------------------------------------------
-# 将 GraspGen 输出转为 GraspCandidate 列表
-# ---------------------------------------------------------------------------
 def _convert_grasps_to_candidates(
     grasps: torch.Tensor,
     grasp_conf: torch.Tensor,
     default_width: float = 0.08,
 ) -> list[GraspCandidate]:
     """
-    将 GraspGen 的 (M, 4, 4) 齐次矩阵 + (M,) 置信度转为 GraspCandidate 列表。
-
     Args:
         grasps: (M, 4, 4) 齐次变换矩阵 (torch.Tensor)
         grasp_conf: (M,) 置信度分数 (torch.Tensor)
@@ -264,10 +223,6 @@ def run_graspgen_inference(
     grasp_threshold: float = 0.5,
 ) -> tuple[list[GraspCandidate], o3d.geometry.PointCloud]:
     """
-    执行 GraspGen 推理，返回排序后的抓取候选列表和物体点云。
-
-    接口签名与 grasp_process.run_grasp_inference 对齐，以便上层无缝切换。
-
     Args:
         color_path: RGB 图像路径或 numpy 数组
         depth_path: 深度图路径或 numpy 数组
@@ -280,9 +235,6 @@ def run_graspgen_inference(
         filtered_gg_list: 按综合得分排序的 GraspCandidate 列表
         cloud_o3d: Open3D 点云对象
 
-    Raises:
-        ImportError: 如果 GraspGen 依赖未安装
-        FileNotFoundError: 如果 gripper config 或 checkpoint 不存在
     """
     # 1. 构造物体点云
     object_points, object_colors, cloud_o3d = _build_pointcloud_from_images(
@@ -373,9 +325,7 @@ def run_graspgen_inference(
     return filtered_gg_list, cloud_o3d
 
 
-# ---------------------------------------------------------------------------
-# 可视化保存
-# ---------------------------------------------------------------------------
+
 def _save_graspgen_visualizations(
     cloud_o3d: o3d.geometry.PointCloud,
     all_candidates: list[GraspCandidate],
@@ -383,16 +333,7 @@ def _save_graspgen_visualizations(
     grasp_with_composite_scores: list[tuple],
     target_name: str,
 ) -> None:
-    """
-    将 GraspGen 预测的抓取候选可视化保存为图片。
 
-    Args:
-        cloud_o3d: 物体点云
-        all_candidates: 所有抓取候选（未经角度筛选）
-        filtered_gg_list: 综合评分排序后的最终抓取候选列表
-        grasp_with_composite_scores: (GraspCandidate, composite_score) 元组列表
-        target_name: 目标物体名称
-    """
     # 避免循环导入
     from grasp_process import save_pointcloud_image
 

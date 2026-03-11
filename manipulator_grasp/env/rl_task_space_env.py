@@ -1,16 +1,3 @@
-"""
-Task-Space RL Environment for Robot Arm Path Planning
-任务空间强化学习环境：从 pickup zone 到 drop zone 的末端路径规划
-
-核心改进：
-1. 观测空间：末端位置 + 姿态 + 关节角度 + 目标位置
-2. 奖励函数：基于末端到目标距离
-3. 成功判定：末端进入 drop zone
-4. 自动复位：成功后返回 home 位置
-
-
-"""
-
 import os
 import time
 import numpy as np
@@ -23,11 +10,7 @@ import pinocchio
 
 
 class RLTaskSpaceEnv(gym.Env):
-    """
-    任务空间强化学习环境
-    
-    任务：控制机械臂末端从 pickup zone 移动到 drop zone
-    
+    """    
     观测空间 (16维):
         - 末端执行器位置 (3,)
         - 末端执行器姿态四元数 (4,)

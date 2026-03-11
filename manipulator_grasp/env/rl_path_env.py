@@ -1,11 +1,3 @@
-"""
-Gymnasium-compatible RL Environment for Robot Arm Path Planning
-基于MuJoCo的强化学习路径规划环境
-
-This environment trains a policy to move the robot arm from start to goal configurations
-while avoiding collisions, moving smoothly, and completing as fast as possible.
-"""
-
 import os
 import numpy as np
 import mujoco
@@ -17,8 +9,6 @@ import pinocchio
 
 class RLPathEnv(gym.Env):
     """
-    强化学习路径规划环境
-    
     观察空间:
         - 当前关节位置 (6,)
         - 当前关节速度 (6,)
